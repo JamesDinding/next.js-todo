@@ -1,101 +1,144 @@
-import Image from "next/image";
+"use client";
+import React, { useEffect, useState, useMemo } from "react";
+import List from "@/components/List";
+import Item from "@/components/Item";
+import Modal from "@/components/Modal";
+import Form from "@/components/Form";
+import RadioButtonGroup from "@/components/RadioButtonGroup";
+import useFetch from "@/hooks/useFetch";
+import { API_ROUTE, DEFAULT_FORMDATA, TASK_STATUS } from "@/constants";
+
+interface TaskItem {
+  id: number;
+  name: string;
+  description: string;
+  is_completed: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+type Tasks = TaskItem[] | null;
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const { state: getTaskState, fetchData: getTask } = useFetch<Tasks>();
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  const { state: postTaskState, fetchData: postTask } = useFetch<TaskItem>();
+
+  const { state: putTaskState, fetchData: putTask } = useFetch<TaskItem>();
+  const { state: deleteTaskState, fetchData: deleteTask } =
+    useFetch<TaskItem>();
+
+  const [selectData, setSelectData] = useState<TaskItem>(DEFAULT_FORMDATA);
+  const [isEdit, setIsEdit] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
+
+  const [selectStatus, setSelectStatus] = useState(TASK_STATUS.All);
+  const changeHandler = (status: string) => setSelectStatus(status);
+
+  const filterList = useMemo(() => {
+    return getTaskState.data?.filter((el) => {
+      if (selectStatus === TASK_STATUS.Completed) return el.is_completed;
+      if (selectStatus === TASK_STATUS.UnCompleted) return !el.is_completed;
+      return true;
+    });
+  }, [getTaskState, selectStatus]);
+
+  useEffect(() => {
+    getTask(API_ROUTE + "/task");
+  }, []);
+
+  return (
+    <>
+      <Modal isOpen={isOpen} onClose={() => setIsOpen(false)}>
+        <div>
+          <div className='text-xl font-bold mb-2'>
+            {isEdit ? "編輯" : "新增"}
+          </div>
+          <Form
+            isEdit={isEdit}
+            initialData={
+              isEdit
+                ? selectData
+                : { name: "", description: "", is_completed: false }
+            }
+            onSubmit={(payload) => {
+              const callback = () => {
+                // close modal & refresh
+                setIsOpen(false);
+                setSelectData(DEFAULT_FORMDATA);
+                getTask(API_ROUTE + "/task");
+              };
+              if (isEdit) {
+                putTask(
+                  API_ROUTE + "/task/" + selectData.id,
+                  {
+                    method: "PUT",
+                    headers: {
+                      "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(payload),
+                  },
+                  callback
+                );
+              } else {
+                postTask(
+                  API_ROUTE + "/task",
+                  {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(payload),
+                  },
+                  callback
+                );
+              }
+            }}
+          />
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
+      </Modal>
+      <div className='px-10 py-4'>
+        <RadioButtonGroup selected={selectStatus} onChange={changeHandler} />
+        <button
+          type='button'
+          className='mb-4 bg-green-500 text-white font-bold py-2 px-4 rounded hover:bg-green-600 active:bg-green-700'
+          onClick={() => {
+            setIsEdit(false);
+            setIsOpen(true);
+            setSelectData(DEFAULT_FORMDATA);
+          }}
         >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
+          新增
+        </button>
+        <div>
+          <List
+            items={filterList || []}
+            renderItem={(task, index) => (
+              <Item
+                key={task.id}
+                task={task}
+                index={index}
+                onEdit={() => {
+                  setSelectData(task);
+                  setIsEdit(true);
+                  setIsOpen(true);
+                }}
+                onRemove={() =>
+                  deleteTask(
+                    API_ROUTE + "/task/" + task.id,
+                    {
+                      method: "DELETE",
+                    },
+                    () => {
+                      getTask(API_ROUTE + "/task");
+                    }
+                  )
+                }
+              />
+            )}
           />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+        </div>
+      </div>
+    </>
   );
 }
